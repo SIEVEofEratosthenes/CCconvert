@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APIKEY="27b915dcf3bbbbbb118b48d7edacee7da005a20e2674def53ad6fd61b806c8cd"
+APIKEY=""
 FCOIN=""
 TCOIN=""
 AMT=""
