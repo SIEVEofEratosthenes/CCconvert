@@ -1,5 +1,5 @@
 # CCconvert 
-===========================================
+
 A Crypto Coin Price Converter
 
 "Did I stutter mother fucker?"
