@@ -1,44 +1,59 @@
 #!/bin/bash
 
-APIKEY=""
+APIKEY="EDIT THIS"
 FCOIN=""
 TCOIN=""
 AMT=""
 USD=0
 RATE=0
+IRATE=0
+rate_flag=0
+irate_flag=0
+TARGET=""
 
 help_screen() {
-        echo " " 
-        echo "CCconvert v0.5.1 (Lothario)"
-        echo " "
-        echo "Usage: "
-        echo " "
-        echo "$0 -a <amount> -f <from_coin> -t <to_coin> [options]"
-        echo " "
-        echo "Options:  "
-        echo "             -a|--amount     <amount>"
-        echo "             -f|--from       <coin>"
-	echo "             -t|--to         <coin>"
-	echo "             -r|--rate	   BTC-COIN Rate to determine how much of -t COIN you will receive at -f COIN rate"
-        echo "             -u|--usd,       Get USD price of converted coin also"
-        echo "             -h|--help,      this help screen      "
-        echo " "
-        echo "Example: "
-        echo "          $ ccconvert -a 30 -f ADA -t XMR"
-        echo "          $ ccconvert -a 100 -f USD -t BTC"
-        echo " "
-	echo "          $ ccconvert -a 0.0002 -f btc -t xhv --rate 0.00011669"
-	echo " " 
-	echo "          0.0002 BTC ---> 2.428402 XHV"
- 	echo " "
-	echo "          0.0002 @ 0.00011669 BTC-XHV: 1.713970252119 XHV"
-	echo " "
-	echo "          $ ccconvert -a 2.36 -f XHV -t btc --rate 0.00011669"
- 	echo " "
-	echo "          2.36 XHV ---> .0001942752 BTC"
-        echo " "
-	echo "          2.36 @ 0.00011669 XHV-BTC: .000275388399 BTC "
+        __usage="
+         CCconvert v0.6.2 (Cosmic Relations)
 
+         Usage: 
+          
+         $0 -a <amount> -f <from_coin> -t <to_coin> [options]
+          
+         Options:  
+                      -a|--amount     <amount>
+                      -f|--from       <coin>
+	              -t|--to         <coin>
+	              -r|--rate	      TCOIN-FCOIN Rate to determine how much of -t COIN you will receive at -f COIN rate
+	              -i|--irate      Inverse rate. How much -t COIN you will receive at FCOIN-TCOIN rate
+                      -u|--usd,       Get USD price of converted coin also
+                      --target-amt    Will determine the FCOIN-TCOIN rate at which target_amt TCOIN is reached. 
+                      -h|--help,      this help screen      
+          
+         Example: 
+
+ 		$ ccconvert -a 1 -f xhv -t btc
+	 		 
+		1 XHV ---> .00005596 BTC
+		 
+		$ ccconvert -a 2.36 -f XHV -t btc --irate 0.00011669
+		 
+		2.36 XHV ---> .0001320656 BTC
+		 
+		2.36 @ 0.00011669 BTC-XHV: .0002753884 BTC
+
+		$ ccconvert -a 1 -f btc -t xhv
+		 
+		1 BTC ---> 17889.09 XHV
+		 
+
+		$ ccconvert -a 2.36 -f XHV -t btc --rate 18000
+		 
+		2.36 XHV ---> .000131924 BTC
+		 
+		2.36 @ 18000 XHV-BTC: .000131111128 BTC
+ 
+	"
+	echo "$__usage"
         exit
         
 }
@@ -48,7 +63,7 @@ convert_crypto() {
         RESULT=`curl -s "$API"`
         toAMT=`echo $RESULT | cut -d ":" -f 2 | sed -e 's/\}//g'`
         if [[ "$TCOIN" == "USD" ]]; then
-               convAMT=`echo "scale=2; (($AMT*$toAMT)*100)/100" | bc`
+               convAMT=`echo "scale=12; (($AMT*$toAMT)*100)/100" | bc`
         else 
                convAMT=`echo "scale=12; $AMT*$toAMT" | bc`
         fi
@@ -57,7 +72,7 @@ convert_crypto() {
                 APIUSD="https://min-api.cryptocompare.com/data/price?fsym=${TCOIN}&tsyms=USD&api_key=$APIKEY"
                 USDRESULT=`curl -s "$APIUSD"`
                 usdAMT=`echo $USDRESULT | cut -d ":" -f 2 | sed -e 's/\}//g'`
-                USDconvAMT=`echo "scale=2; (($usdAMT*$convAMT)*100)/100" | bc`
+                USDconvAMT=`echo "scale=3; (($usdAMT*$convAMT)*100)/100" | bc`
                 echo "$AMT $FCOIN ---> $convAMT $TCOIN ---> $USDconvAMT USD"
                 echo " "                
         else
@@ -65,20 +80,23 @@ convert_crypto() {
                 echo " "        
         fi
 
-	if (( $(echo  "$RATE  >  0" | bc -l) )); then
-	        API="https://min-api.cryptocompare.com/data/price?fsym=${TCOIN}&tsyms=${FCOIN}&api_key=$APIKEY"
-        	RESULT=`curl -s "$API"`
-        	otoAMT=${toAMT}
-	        toAMT=`echo $RESULT | cut -d ":" -f 2 | sed -e 's/\}//g'`
-	        if (( $(echo "$toAMT > 1" | bc -l) )); then
-			rateAMT=`echo "scale=12; ($RATE / $otoAMT)" | bc`
-			TotalrateAMT=`echo "scale=12; ($convAMT*$rateAMT)" | bc`
-			echo "$AMT @ $RATE $FCOIN-$TCOIN: $TotalrateAMT $TCOIN"
-		else
-			rateAMT=`echo "scale=12; ($toAMT / $RATE)" | bc`
-			TotalrateAMT=`echo "scale=12; ($convAMT*$rateAMT)" | bc`
-			echo "$AMT @ $RATE $FCOIN-$TCOIN: $TotalrateAMT $TCOIN"
-		fi		
+	if [[ $(echo  "$RATE  >  0" | bc -l) ]] && [[ $rate_flag -eq 1 ]]; then
+		API="https://min-api.cryptocompare.com/data/price?fsym=${TCOIN}&tsyms=${FCOIN}&api_key=$APIKEY"
+		RESULT=`curl -s "$API"`
+		current_rate=`echo $RESULT | cut -d ":" -f 2 | sed -e 's/\}//g'`
+		futureAMT=`echo "scale=12; ($current_rate / $RATE)*$convAMT" | bc`
+		echo "$AMT @ $RATE $FCOIN-$TCOIN: $futureAMT $TCOIN"	
+	elif [[ $(echo  "$IRATE  >  0" | bc -l) ]] && [[ $irate_flag -eq 1 ]]; then
+		#futureAMT=`echo "scale=12; ($toAMT / $IRATE)*$AMT" | bc`
+		futureAMT=`echo "scale=12; ($AMT*$IRATE)" | bc`
+		echo "$AMT @ $IRATE $TCOIN-$FCOIN: $futureAMT $TCOIN"	
+	fi
+	
+	echo " "
+	if [[ ! -z $TARGET ]]; then
+		rho_fcoin=`echo "scale=12; $AMT/$TARGET" | bc`
+		echo "$TARGET $TCOIN @ $rho_fcoin $FCOIN-$TCOIN"
+		
 	fi
 
 }
@@ -98,6 +116,11 @@ while [ "$#" -gt 0 ]; do
                         shift
                         shift
                         ;;
+		--target-amt)
+			TARGET=${2}
+			shift
+			shift
+			;;
                 -a|--amount)
                         AMT=${2}
                         shift
@@ -109,6 +132,13 @@ while [ "$#" -gt 0 ]; do
                         ;;
 		-r|--rate)
 			RATE=${2}
+			rate_flag=1
+			shift
+			shift
+			;;
+		-i|--irate)
+			IRATE=${2}
+			irate_flag=1
 			shift
 			shift
 			;;
